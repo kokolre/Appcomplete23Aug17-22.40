@@ -5,9 +5,6 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.util.Log;
 
-/**
- * Created by ByDiamon on 6/6/2560.
- */
 
 public class MyOpenHelper extends SQLiteOpenHelper {
     private static final String TAG = MyOpenHelper.class.getSimpleName();

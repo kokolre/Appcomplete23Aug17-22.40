@@ -1,17 +1,24 @@
 package com.example.toto.projertbutstop;
 
+import android.app.ProgressDialog;
+import android.content.ContentValues;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.os.AsyncTask;
 import android.os.Handler;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.widget.Toast;
+
+import com.squareup.okhttp.OkHttpClient;
+import com.squareup.okhttp.Request;
+import com.squareup.okhttp.Response;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -20,16 +27,41 @@ public class loaddata extends AppCompatActivity {
 
     private Handler handler;
     private Runnable runnable;
-    private MyManage myManage;
+    private ProgressDialog pd;
+    private MyOpenHelper myOpenHelper;
+    private SQLiteDatabase sqLiteDatabase;
+    //For BusStop
+    public static final String TABLE_BUSSTOP = "busstopTABLE"; //ชื่อเทเบิล
+    public static final String COLUMN_ID_BUSSTOP = "_id";
+    public static final String COLUMN_Lat = "Lat";
+    public static final String COLUMN_Lng = "Lng";
+    public static final String COLUMN_Namebusstop = "Namebusstop";
 
+    //For Bus
+    public static final String TABLE_BUS = "busTABLE";
+    public static final String COLUMN_ID_BUS = "id_bus";
+    public static final String COLUMN_bus = "bus";
+    public static final String COLUMN_bus_details = "bus_details";
+
+    //For BusRoute
+    public static final String TABLE_BUSROUTE = "busrouteTABLE";
+    public static final String COLUMN_ID_BUSROUTE = "id_busroute";
+    public static final String COLUMN_direction = "direction";
+    private String urlJSON_BusStop = "http://jsontosqlite.esy.es/php_get_data_busstoptable.php";
+    private String urlJSON_Bus = "http://jsontosqlite.esy.es/php_get_data_bustable.php";
+    private String urlJSON_BusRoute = "http://jsontosqlite.esy.es/inner%20join.php";
+
+    String[] urlStrings = new String[]{urlJSON_BusStop,
+            urlJSON_Bus, urlJSON_BusRoute};
+    //สร้างฐานข้อมูล
+    public static final String DATABASE_NAME = "Busstop.db";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_loaddata);
 
-        //Create SQLite or Connected
-        myManage = new MyManage(loaddata.this);
+        new MyOpenHelper(loaddata.this);
 
         //Check Database
         String tag = "18AugV1";
@@ -44,6 +76,7 @@ public class loaddata extends AppCompatActivity {
         }
 
     }//Main method
+
     private void deleteAllData() {
 
         SQLiteDatabase objSQLite = openOrCreateDatabase("Busstop.db", MODE_PRIVATE, null);
@@ -60,7 +93,7 @@ public class loaddata extends AppCompatActivity {
             //Connected Internet OK
             Log.d(tag, "Connected Internet OK");
             deleteAllData();
-            refreshSQLite();
+            new LongRunTask().execute();
         } else {
             //Cannot Connected Internet Intent ==> Home.java
             Log.d(tag, "Cannot Connected Internet Intent ==> Home.java");
@@ -89,102 +122,6 @@ public class loaddata extends AppCompatActivity {
         finish();
     }
 
-    private void refreshSQLite() {
-
-        try {
-
-            MyConstant myConstant = new MyConstant();
-            String[] urlStrings = new String[]{myConstant.getUrlJSON_BusStop(),
-                    myConstant.getUrlJSON_Bus(), myConstant.getUrlJSON_BusRoute()};
-
-            for (int i = 0; i < urlStrings.length; i += 1) {
-
-                GetAllData getAllData = new GetAllData(loaddata.this);
-                getAllData.execute(urlStrings[i]);
-                String strJSON = getAllData.get();
-                Log.d("17AugV1", "JSoN ==> " + strJSON);
-
-                myUpdateSQLite(i, strJSON);
-
-            }   // for
-            Toast.makeText(loaddata.this, "อัพเดทข้อมูลล่าสุดแล้ว", Toast.LENGTH_LONG).show();
-            Handler handler = new Handler();
-            handler.postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    myIntent();
-                }
-            }, 3000);
-
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-    }
-
-    private void myUpdateSQLite(int index, String strJSON) {
-
-        try {
-
-            JSONArray jsonArray = new JSONArray(strJSON);
-            for (int i = 0; i < jsonArray.length(); i += 1) {
-
-                JSONObject jsonObject = jsonArray.getJSONObject(i);
-                MyManage myManage = new MyManage(loaddata.this);
-
-                switch (index) {
-
-                    case 0: // for BusStop
-
-                        String strCOLUMN_ID_BUSSTOP = jsonObject.getString("id");
-                        String strCOLUMN_Lat = jsonObject.getString("X");
-                        String strCOLUMN_Lng = jsonObject.getString("Y");
-                        String strCOLUMN_Namebusstop = jsonObject.getString("Namebusstop");
-
-                        myManage.addBusStop(strCOLUMN_ID_BUSSTOP, strCOLUMN_Lat,
-                                strCOLUMN_Lng, strCOLUMN_Namebusstop);
-
-                        break;
-
-                    case 1: // for Bus
-
-                        String strCOLUMN_ID_BUS = jsonObject.getString("id_bus");
-                        String strCOLUMN_bus = jsonObject.getString("bus");
-                        String strCOLUMN_bus_details = jsonObject.getString("bus_details");
-
-                        myManage.addBus(strCOLUMN_ID_BUS, strCOLUMN_bus, strCOLUMN_bus_details);
-
-                        break;
-
-                    case 2: // for BusRoute
-
-                        String strCOLUMN_id_busroute  = jsonObject.getString("id_busroute");
-                        String strCOLUMN_direction = jsonObject.getString("direction");
-                        String strCOLUMN_bus1 = jsonObject.getString("bus");
-                        String strCOLUMN_bus_details1 = jsonObject.getString("bus_details");
-                        String strCOLUMN_Namebusstop1 = jsonObject.getString("Namebusstop");
-                        String strCOLUMN_Lat1 = jsonObject.getString("X");
-                        String strCOLUMN_Lng1 = jsonObject.getString("Y");
-
-                        myManage.addBusRoute(strCOLUMN_id_busroute, strCOLUMN_direction,
-                                strCOLUMN_bus1, strCOLUMN_bus_details1, strCOLUMN_Namebusstop1,
-                                strCOLUMN_Lat1, strCOLUMN_Lng1);
-
-                        break;
-
-                }   // switch
-
-
-            }   //for
-
-        } catch (Exception e) {
-            Log.d("17AugV1", "e ==> " + e.toString());
-        }
-
-    }
-
-
 
     private boolean checkInternet() {
         boolean result = false; // No Internet
@@ -199,7 +136,7 @@ public class loaddata extends AppCompatActivity {
 
     private boolean checkDatabase() {
         boolean result = true; // Have Database
-        SQLiteDatabase sqLiteDatabase = openOrCreateDatabase(MyOpenHelper.DATABASE_NAME,
+        SQLiteDatabase sqLiteDatabase = openOrCreateDatabase(DATABASE_NAME,
                 MODE_PRIVATE, null);
         Cursor cursor = sqLiteDatabase.rawQuery("SELECT * FROM busstopTABLE", null);
         cursor.moveToFirst();
@@ -232,6 +169,128 @@ public class loaddata extends AppCompatActivity {
         dialog.show();
     }
 
+
+    private class LongRunTask extends AsyncTask<String, Integer, String> {
+        @Override
+        protected String doInBackground(String... strings) {
+            myOpenHelper = new MyOpenHelper(loaddata.this);
+            sqLiteDatabase = myOpenHelper.getWritableDatabase();
+            try {
+
+
+                for (int x = 0; x < urlStrings.length; x += 1) {
+                    pd.incrementProgressBy(1);
+                    try {
+
+                        OkHttpClient okHttpClient = new OkHttpClient();
+                        Request.Builder builder = new Request.Builder();
+                        Request request = builder.url(urlStrings[x]).build();
+                        Response response = okHttpClient.newCall(request).execute();
+                        String strJSON = response.body().string();
+                        Log.d("17AugV1", "JSoN ==> " + strJSON);
+                        JSONArray jsonArray = new JSONArray(strJSON);
+                        for (int i = 0; i < jsonArray.length(); i += 1) {
+
+                            JSONObject jsonObject = jsonArray.getJSONObject(i);
+
+                            switch (x) {
+
+                                case 0: // for BusStop
+
+                                    String strCOLUMN_ID_BUSSTOP = jsonObject.getString("id");
+                                    String strCOLUMN_Lat = jsonObject.getString("X");
+                                    String strCOLUMN_Lng = jsonObject.getString("Y");
+                                    String strCOLUMN_Namebusstop = jsonObject.getString("Namebusstop");
+                                    ContentValues contentValues = new ContentValues();
+                                    contentValues.put(COLUMN_ID_BUSSTOP, strCOLUMN_ID_BUSSTOP);
+                                    contentValues.put(COLUMN_Lat, strCOLUMN_Lat);
+                                    contentValues.put(COLUMN_Lng, strCOLUMN_Lng);
+                                    contentValues.put(COLUMN_Namebusstop, strCOLUMN_Namebusstop);
+                                    sqLiteDatabase.insert(TABLE_BUSSTOP, null, contentValues);
+
+                                    break;
+
+                                case 1: // for Bus
+
+                                    String strCOLUMN_ID_BUS = jsonObject.getString("id_bus");
+                                    String strCOLUMN_bus = jsonObject.getString("bus");
+                                    String strCOLUMN_bus_details = jsonObject.getString("bus_details");
+                                    ContentValues contentValues1 = new ContentValues();
+                                    contentValues1.put(COLUMN_ID_BUS, strCOLUMN_ID_BUS);
+                                    contentValues1.put(COLUMN_bus, strCOLUMN_bus);
+                                    contentValues1.put(COLUMN_bus_details, strCOLUMN_bus_details);
+
+                                    sqLiteDatabase.insert(TABLE_BUS, null, contentValues1);
+
+                                    break;
+
+                                case 2: // for BusRoute
+
+                                    String strCOLUMN_id_busroute  = jsonObject.getString("id_busroute");
+                                    String strCOLUMN_direction = jsonObject.getString("direction");
+                                    String strCOLUMN_bus1 = jsonObject.getString("bus");
+                                    String strCOLUMN_bus_details1 = jsonObject.getString("bus_details");
+                                    String strCOLUMN_Namebusstop1 = jsonObject.getString("Namebusstop");
+                                    String strCOLUMN_Lat1 = jsonObject.getString("X");
+                                    String strCOLUMN_Lng1 = jsonObject.getString("Y");
+                                    ContentValues contentValues2 = new ContentValues();
+                                    contentValues2.put(COLUMN_ID_BUSROUTE, strCOLUMN_id_busroute);
+                                    contentValues2.put(COLUMN_direction, strCOLUMN_direction);
+                                    contentValues2.put(COLUMN_bus, strCOLUMN_bus1);
+                                    contentValues2.put(COLUMN_bus_details, strCOLUMN_bus_details1);
+                                    contentValues2.put(COLUMN_Namebusstop, strCOLUMN_Namebusstop1);
+                                    contentValues2.put(COLUMN_Lat, strCOLUMN_Lat1);
+                                    contentValues2.put(COLUMN_Lng, strCOLUMN_Lng1);
+
+                                    sqLiteDatabase.insert(TABLE_BUSROUTE, null, contentValues2);
+
+                                    break;
+
+                            }   // switch
+                        }   //for
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            return null;
+        }
+
+        @Override
+        protected void onPreExecute() {
+            super.onPreExecute();
+            pd = new ProgressDialog(loaddata.this);
+            pd.setIcon(R.drawable.iconn1);
+            pd.setTitle("กำลังอัพเดทข้อมูล");
+            pd.setMessage("Downloading โปรดรอ . . .");
+            pd.setCancelable(false);
+            pd.setMax(urlStrings.length);
+            pd.setProgress(0);
+            pd.setInverseBackgroundForced(false);
+            pd.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
+            pd.show();
+        }
+
+        /*try{
+                while (pd.getProgress()<pd.getMax()){
+                    pd.incrementProgressBy(1);
+                Thread.sleep(1000);
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }*/
+
+        @Override
+        protected void onPostExecute(String x) {
+            super.onPostExecute(x);
+            pd.dismiss();
+            myIntent();
+            Toast.makeText(loaddata.this,"อัพเดทข้อมูลเสร็จแล้ว",Toast.LENGTH_LONG).show();
+        }
+
+    }
 
 
 }   // Main Class
