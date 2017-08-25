@@ -139,7 +139,7 @@ public class notifications_offline extends AppCompatActivity {
                 for (int a = 0; a < LngBus.size(); a++) {
                     dis.add((float) distance(TestLat.get(a), TestLng.get(a), latChanged, lngChanged));
                     Log.d("LocationListener", "dis " + dis);
-                    //Toast.makeText(getApplicationContext(), "dis  "+dis, Toast.LENGTH_SHORT).show();
+                    //Toast.makeText(getApplicationContext(), "dis  "+dis.get(p), Toast.LENGTH_SHORT).show();
                 }
                 if (p == 0 && dis.get(p) < 0.02) {
                     Log.d("Test19", "ป้ายบัจุบัน " + NameBus.get(p));

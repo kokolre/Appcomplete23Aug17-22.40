@@ -61,7 +61,8 @@ public class loaddata extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_loaddata);
 
-        new MyOpenHelper(loaddata.this);
+        myOpenHelper = new MyOpenHelper(loaddata.this);
+        sqLiteDatabase = myOpenHelper.getWritableDatabase();
 
         //Check Database
         String tag = "18AugV1";
